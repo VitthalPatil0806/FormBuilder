@@ -32,6 +32,9 @@
     },
     {
       "path": "./libs/shared/test-utils"
+    },
+    {
+      "path": "./form-builder"
     }
   ]
 }
