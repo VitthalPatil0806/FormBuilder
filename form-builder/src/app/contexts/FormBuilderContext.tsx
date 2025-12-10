@@ -1,206 +1,304 @@
 // apps/form-builder/src/app/context/FormBuilderContext.tsx
-import React, { createContext, useContext, useMemo, useReducer } from "react";
-import {
-  FieldMeta,
-  FieldSize,
-  FieldType,
-  FormConfig,
-  FormViewType,
-  RowMeta,
-  SectionMeta,
-} from "../domain/formTypes";
+import React, { createContext, useContext, useReducer } from "react";
+import { FormConfig, SectionMeta, FieldType } from "../domain/formTypes";
+
+// -------------------------
+// TYPES
+// -------------------------
+interface FormBuilderState {
+  config: FormConfig;
+
+  // NEW: Layout editing mode flags
+  editingLayoutSubmissionId?: string | null;
+  editingLayoutValues?: Record<string, any> | null;
+}
 
 type Action =
   | { type: "SET_FORM_LABEL"; label: string }
-  | { type: "SET_VIEW_TYPE"; viewType: FormViewType }
+  | { type: "SET_VIEW_TYPE"; viewType: "create" | "edit" | "view" }
   | { type: "SET_SECTIONS_ENABLED"; enabled: boolean }
   | { type: "ADD_SECTION" }
-  | { type: "DELETE_SECTION"; sectionId: string }
-  | { type: "TOGGLE_SECTION_COLLAPSE"; sectionId: string }
   | { type: "UPDATE_SECTION_LABEL"; sectionId: string; label: string }
+  | { type: "TOGGLE_SECTION_COLLAPSE"; sectionId: string }
+  | { type: "DELETE_SECTION"; sectionId: string }
   | { type: "ADD_ROW"; sectionId: string }
   | { type: "DELETE_ROW"; sectionId: string; rowId: string }
-  | { type: "ADD_FIELD"; sectionId: string; rowId: string; fieldType: FieldType }
-  | { type: "DELETE_FIELD"; sectionId: string; rowId: string; fieldId: string }
+  | {
+      type: "ADD_FIELD";
+      sectionId: string;
+      rowId: string;
+      fieldType: FieldType;
+    }
   | {
       type: "UPDATE_FIELD";
       sectionId: string;
       rowId: string;
       fieldId: string;
-      patch: Partial<FieldMeta>;
+      patch: any;
+    }
+  | {
+      type: "DELETE_FIELD";
+      sectionId: string;
+      rowId: string;
+      fieldId: string;
+    }
+  // NEW ACTIONS
+  | {
+      type: "START_EDIT_LAYOUT";
+      submissionId: string;
+      values: Record<string, any>;
+    }
+  | {
+      type: "END_EDIT_LAYOUT";
     };
 
-interface FormBuilderContextValue {
-  config: FormConfig;
-  dispatch: React.Dispatch<Action>;
-}
+// -------------------------
+// INITIAL STATE
+// -------------------------
+const initialState: FormBuilderState = {
+  config: {
+    label: "Untitled Form",
+    viewType: "create",
+    sectionsEnabled: true,
+    sections: [],
+  },
 
-const FormBuilderContext = createContext<FormBuilderContextValue | null>(null);
-
-const createId = () => Math.random().toString(36).slice(2);
-
-const createDefaultField = (fieldType: FieldType): FieldMeta => ({
-  id: createId(),
-  name: `field_${Math.random().toString(36).slice(2, 7)}`,
-  label: "Field label",
-  type: fieldType,
-  size: "sm",
-  required: false,
-  options: fieldType === "select" ? ["Option 1"] : undefined,
-});
-
-const createDefaultRow = (): RowMeta => ({
-  id: createId(),
-  fields: [createDefaultField("text"), createDefaultField("text"), createDefaultField("text")],
-});
-
-const createDefaultSection = (): SectionMeta => ({
-  id: createId(),
-  label: "New Section",
-  collapsed: false,
-  rows: [createDefaultRow()],
-});
-
-const initialConfig: FormConfig = {
-  id: "form-1",
-  label: "",
-  viewType: "create",
-  sectionsEnabled: true,
-  sections: [createDefaultSection()],
+  editingLayoutSubmissionId: null,
+  editingLayoutValues: null,
 };
 
-function reducer(state: FormConfig, action: Action): FormConfig {
+// -------------------------
+// REDUCER
+// -------------------------
+function reducer(state: FormBuilderState, action: Action): FormBuilderState {
   switch (action.type) {
     case "SET_FORM_LABEL":
-      return { ...state, label: action.label };
+      return {
+        ...state,
+        config: { ...state.config, label: action.label },
+      };
+
     case "SET_VIEW_TYPE":
-      return { ...state, viewType: action.viewType };
+      return {
+        ...state,
+        config: { ...state.config, viewType: action.viewType },
+      };
+
     case "SET_SECTIONS_ENABLED":
-      return { ...state, sectionsEnabled: action.enabled };
+      return {
+        ...state,
+        config: { ...state.config, sectionsEnabled: action.enabled },
+      };
+
+    // -------------------------
+    // SECTIONS
+    // -------------------------
     case "ADD_SECTION":
-      return { ...state, sections: [...state.sections, createDefaultSection()] };
-    case "DELETE_SECTION":
       return {
         ...state,
-        sections: state.sections.filter((s) => s.id !== action.sectionId),
+        config: {
+          ...state.config,
+          sections: [
+            ...state.config.sections,
+            {
+              id: crypto.randomUUID(),
+              label: "New Section",
+              collapsed: false,
+              rows: [],
+            },
+          ],
+        },
       };
-    case "TOGGLE_SECTION_COLLAPSE":
-      return {
-        ...state,
-        sections: state.sections.map((s) =>
-          s.id === action.sectionId ? { ...s, collapsed: !s.collapsed } : s
-        ),
-      };
+
     case "UPDATE_SECTION_LABEL":
       return {
         ...state,
-        sections: state.sections.map((s) =>
-          s.id === action.sectionId ? { ...s, label: action.label } : s
-        ),
+        config: {
+          ...state.config,
+          sections: state.config.sections.map((s) =>
+            s.id === action.sectionId ? { ...s, label: action.label } : s
+          ),
+        },
       };
+
+    case "TOGGLE_SECTION_COLLAPSE":
+      return {
+        ...state,
+        config: {
+          ...state.config,
+          sections: state.config.sections.map((s) =>
+            s.id === action.sectionId ? { ...s, collapsed: !s.collapsed } : s
+          ),
+        },
+      };
+
+    case "DELETE_SECTION":
+      return {
+        ...state,
+        config: {
+          ...state.config,
+          sections: state.config.sections.filter(
+            (s) => s.id !== action.sectionId
+          ),
+        },
+      };
+
+    // -------------------------
+    // ROWS
+    // -------------------------
     case "ADD_ROW":
       return {
         ...state,
-        sections: state.sections.map((s) =>
-          s.id === action.sectionId
-            ? { ...s, rows: [...s.rows, createDefaultRow()] }
-            : s
-        ),
+        config: {
+          ...state.config,
+          sections: state.config.sections.map((s) =>
+            s.id === action.sectionId
+              ? {
+                  ...s,
+                  rows: [
+                    ...s.rows,
+                    { id: crypto.randomUUID(), fields: [] },
+                  ],
+                }
+              : s
+          ),
+        },
       };
+
     case "DELETE_ROW":
       return {
         ...state,
-        sections: state.sections.map((s) =>
-          s.id === action.sectionId
-            ? { ...s, rows: s.rows.filter((r) => r.id !== action.rowId) }
-            : s
-        ),
+        config: {
+          ...state.config,
+          sections: state.config.sections.map((s) =>
+            s.id === action.sectionId
+              ? {
+                  ...s,
+                  rows: s.rows.filter((r) => r.id !== action.rowId),
+                }
+              : s
+          ),
+        },
       };
+
+    // -------------------------
+    // FIELDS
+    // -------------------------
     case "ADD_FIELD":
       return {
         ...state,
-        sections: state.sections.map((s) =>
-          s.id === action.sectionId
-            ? {
-                ...s,
-                rows: s.rows.map((r) =>
-                  r.id === action.rowId
-                    ? {
-                        ...r,
-                        fields: [...r.fields, createDefaultField(action.fieldType)],
-                      }
-                    : r
-                ),
-              }
-            : s
-        ),
+        config: {
+          ...state.config,
+          sections: state.config.sections.map((s) =>
+            s.id === action.sectionId
+              ? {
+                  ...s,
+                  rows: s.rows.map((r) =>
+                    r.id === action.rowId
+                      ? {
+                          ...r,
+                          fields: [
+                            ...r.fields,
+                            {
+                              id: crypto.randomUUID(),
+                              name: "field_" + crypto.randomUUID().slice(0, 6),
+                              label: "New Field",
+                              type: action.fieldType,
+                              required: false,
+                              size: "sm",
+                              options: [],
+                            },
+                          ],
+                        }
+                      : r
+                  ),
+                }
+              : s
+          ),
+        },
       };
+
+    case "UPDATE_FIELD":
+      return {
+        ...state,
+        config: {
+          ...state.config,
+          sections: state.config.sections.map((s) =>
+            s.id === action.sectionId
+              ? {
+                  ...s,
+                  rows: s.rows.map((r) =>
+                    r.id === action.rowId
+                      ? {
+                          ...r,
+                          fields: r.fields.map((f) =>
+                            f.id === action.fieldId
+                              ? { ...f, ...action.patch }
+                              : f
+                          ),
+                        }
+                      : r
+                  ),
+                }
+              : s
+          ),
+        },
+      };
+
     case "DELETE_FIELD":
       return {
         ...state,
-        sections: state.sections.map((s) =>
-          s.id === action.sectionId
-            ? {
-                ...s,
-                rows: s.rows.map((r) =>
-                  r.id === action.rowId
-                    ? {
-                        ...r,
-                        fields: r.fields.filter((f) => f.id !== action.fieldId),
-                      }
-                    : r
-                ),
-              }
-            : s
-        ),
+        config: {
+          ...state.config,
+          sections: state.config.sections.map((s) =>
+            s.id === action.sectionId
+              ? {
+                  ...s,
+                  rows: s.rows.map((r) => ({
+                    ...r,
+                    fields: r.fields.filter((f) => f.id !== action.fieldId),
+                  })),
+                }
+              : s
+          ),
+        },
       };
-case "UPDATE_FIELD":
-  return {
-    ...state,
-    sections: state.sections.map((section) =>
-      section.id === action.sectionId
-        ? {
-            ...section,
-            rows: section.rows.map((row) =>
-              row.id === action.rowId
-                ? {
-                    ...row,
-                    fields: row.fields.map((field) =>
-                      field.id === action.fieldId
-                        ? { ...field, ...action.patch }  // 👈 ENSURES options are updated
-                        : field
-                    ),
-                  }
-                : row
-            ),
-          }
-        : section
-    ),
-  };
+
+    // -------------------------
+    // NEW: START EDIT LAYOUT
+    // -------------------------
+    case "START_EDIT_LAYOUT":
+      return {
+        ...state,
+        editingLayoutSubmissionId: action.submissionId,
+        editingLayoutValues: action.values,
+      };
+
+    case "END_EDIT_LAYOUT":
+      return {
+        ...state,
+        editingLayoutSubmissionId: null,
+        editingLayoutValues: null,
+      };
 
     default:
       return state;
   }
 }
 
-export const FormBuilderProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  const [config, dispatch] = useReducer(reducer, initialConfig);
+// -------------------------
+// CONTEXT
+// -------------------------
+const FormBuilderContext = createContext<any>(null);
 
-  const value = useMemo(() => ({ config, dispatch }), [config]);
+export const FormBuilderProvider = ({ children }: any) => {
+  const [state, dispatch] = useReducer(reducer, initialState);
 
   return (
-    <FormBuilderContext.Provider value={value}>
+    <FormBuilderContext.Provider value={{ ...state, dispatch }}>
       {children}
     </FormBuilderContext.Provider>
   );
 };
 
-export const useFormBuilder = () => {
-  const ctx = useContext(FormBuilderContext);
-  if (!ctx) {
-    throw new Error("useFormBuilder must be used within FormBuilderProvider");
-  }
-  return ctx;
-};
+export const useFormBuilder = () => useContext(FormBuilderContext);

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useMemo } from "react";
+import React, { createContext, useContext, useMemo, useReducer } from "react";
 import { FormConfig } from "../domain/formTypes";
 
 export interface FormSubmission {
@@ -8,70 +8,65 @@ export interface FormSubmission {
   createdAt: number;
 }
 
-type HistoryAction =
-  | { type: "ADD_SUBMISSION"; payload: { config: FormConfig; values: Record<string, any> } }
+type Action =
+  | { type: "ADD_SUBMISSION"; config: FormConfig; values: Record<string, any> }
   | { type: "UPDATE_SUBMISSION"; id: string; values: Record<string, any> }
+  | { type: "UPDATE_LAYOUT"; id: string; config: FormConfig }
   | { type: "DELETE_SUBMISSION"; id: string }
   | { type: "CLEAR_ALL" };
 
-interface FormHistoryContextValue {
-  submissions: FormSubmission[];
-  addSubmission: (config: FormConfig, values: Record<string, any>) => void;
-  updateSubmission: (id: string, values: Record<string, any>) => void;
-  deleteSubmission: (id: string) => void;
-  clearAll: () => void;
-}
+const FormHistoryContext = createContext<any>(null);
+const randomId = () => Math.random().toString(36).slice(2);
 
-const FormHistoryContext = createContext<FormHistoryContextValue | null>(null);
-
-const createId = () => Math.random().toString(36).slice(2);
-
-function reducer(state: FormSubmission[], action: HistoryAction): FormSubmission[] {
+function reducer(state: FormSubmission[], action: Action): FormSubmission[] {
   switch (action.type) {
     case "ADD_SUBMISSION":
       return [
         {
-          id: createId(),
-          config: action.payload.config,
-          values: action.payload.values,
+          id: randomId(),
+          config: action.config,
+          values: action.values,
           createdAt: Date.now(),
         },
         ...state,
       ];
+
     case "UPDATE_SUBMISSION":
       return state.map((s) =>
         s.id === action.id ? { ...s, values: action.values } : s
       );
+
+    case "UPDATE_LAYOUT":
+      return state.map((s) =>
+        s.id === action.id ? { ...s, config: action.config } : s
+      );
+
     case "DELETE_SUBMISSION":
       return state.filter((s) => s.id !== action.id);
+
     case "CLEAR_ALL":
       return [];
+
     default:
       return state;
   }
 }
 
-export const FormHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const FormHistoryProvider = ({ children }: { children: any }) => {
   const [submissions, dispatch] = useReducer(reducer, []);
-
-  const addSubmission = (config: FormConfig, values: Record<string, any>) =>
-    dispatch({ type: "ADD_SUBMISSION", payload: { config, values } });
-
-  const updateSubmission = (id: string, values: Record<string, any>) =>
-    dispatch({ type: "UPDATE_SUBMISSION", id, values });
-
-  const deleteSubmission = (id: string) =>
-    dispatch({ type: "DELETE_SUBMISSION", id });
-
-  const clearAll = () => dispatch({ type: "CLEAR_ALL" });
 
   const value = useMemo(
     () => ({
       submissions,
-      addSubmission,
-      updateSubmission,
-      deleteSubmission,
-      clearAll,
+      addSubmission: (config: FormConfig, values: Record<string, any>) =>
+        dispatch({ type: "ADD_SUBMISSION", config, values }),
+      updateSubmission: (id: string, values: Record<string, any>) =>
+        dispatch({ type: "UPDATE_SUBMISSION", id, values }),
+      updateSubmissionLayout: (id: string, config: FormConfig) =>
+        dispatch({ type: "UPDATE_LAYOUT", id, config }),
+      deleteSubmission: (id: string) =>
+        dispatch({ type: "DELETE_SUBMISSION", id }),
+      clearAll: () => dispatch({ type: "CLEAR_ALL" }),
     }),
     [submissions]
   );
@@ -83,8 +78,4 @@ export const FormHistoryProvider: React.FC<{ children: React.ReactNode }> = ({ c
   );
 };
 
-export const useFormHistory = () => {
-  const ctx = useContext(FormHistoryContext);
-  if (!ctx) throw new Error("useFormHistory must be used within FormHistoryProvider");
-  return ctx;
-};
+export const useFormHistory = () => useContext(FormHistoryContext);
