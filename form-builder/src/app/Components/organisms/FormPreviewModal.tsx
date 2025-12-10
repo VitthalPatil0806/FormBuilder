@@ -1,216 +1,262 @@
 // apps/form-builder/src/app/components/organisms/FormPreviewModal.tsx
 import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { FieldSize, FormConfig } from "../../domain/formTypes";
+import Button from "../atoms/Button";
 import { useFormHistory } from "../../contexts/FormHistoryContext";
+import { FormConfig } from "../../domain/formTypes";
 
-interface FormPreviewModalProps {
+interface Props {
   config: FormConfig;
-  mode?: "create" | "edit" | "view";
-  initialValues?: Record<string, any>;
-  submissionId?: string; // for edit
+  mode: "create" | "edit" | "view" | "layout-edit-builder";
+  submissionId?: string;
+  existingValues?: Record<string, any>;
   onClose: () => void;
+  onLayoutSaved?: () => void;
 }
 
-const sizeToCol: Record<FieldSize, string> = {
-  sm: "col-span-4",
-  md: "col-span-6",
-  lg: "col-span-8",
-  xl: "col-span-12",
-};
-
-const FormPreviewModal: React.FC<FormPreviewModalProps> = ({
+const FormPreviewModal: React.FC<Props> = ({
   config,
-  mode = "create",
-  initialValues,
+  mode,
   submissionId,
+  existingValues,
   onClose,
+  onLayoutSaved,
 }) => {
-  const readonly = mode === "view";
-  const { addSubmission, updateSubmission } = useFormHistory();
+  const {
+    submissions,
+    addSubmission,
+    updateSubmission,
+    updateSubmissionLayout,
+  } = useFormHistory();
 
-const {
-  register,
-  handleSubmit,
-  formState: { errors },
-  reset,
-} = useForm({
-  defaultValues: initialValues || {}
-});
+  const submission = submissions.find((s) => s.id === submissionId);
 
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<Record<string, any>>({ defaultValues: {} });
+
+  const isView = mode === "view";
+  const isEditValues = mode === "edit";
+  const isLayoutEdit = mode === "layout-edit-builder";
+  const disableInputs = isView || isLayoutEdit;
+
+  // Load values depending on mode
   useEffect(() => {
-    reset(initialValues || {});
-  }, [initialValues, reset]);
+    if (isEditValues && submission) {
+      reset(submission.values);
+    } else if (isView && submission) {
+      reset(submission.values);
+    } else if (isLayoutEdit && existingValues) {
+      reset(existingValues);
+    }
+  }, [submission, existingValues, mode, reset, isEditValues, isView, isLayoutEdit]);
 
-  const onSubmit = (values: any) => {
-    if (readonly) {
+  const onSubmit = (values: Record<string, any>) => {
+    if (mode === "create") {
+      addSubmission(config, values);
+      alert("✔ Form submitted");
       onClose();
       return;
     }
-    if (submissionId) {
+
+    if (isEditValues && submissionId) {
       updateSubmission(submissionId, values);
-    } else {
-      addSubmission(config, values);
+      alert("✔ Values updated");
+      onClose();
+      return;
     }
-    onClose();
+
+    if (isLayoutEdit && submissionId) {
+      updateSubmissionLayout(submissionId, config);
+      alert("✔ Layout updated");
+      onLayoutSaved?.();
+      onClose();
+      return;
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-      <div className="bg-white w-[900px] max-h-[90vh] overflow-y-auto rounded-lg shadow-xl p-8 relative">
-        {/* Close */}
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+      <div className="bg-white w-[900px] max-h-[90vh] overflow-y-auto rounded-lg shadow-lg p-8 relative">
+        {/* Close Button */}
         <button
-          className="absolute top-4 right-5 text-gray-600 hover:text-black text-xl"
           onClick={onClose}
+          className="absolute top-3 right-4 text-gray-500 hover:text-black text-xl"
         >
           ✖
         </button>
 
-        {/* Header */}
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">
-          {config.label || "Untitled Form"}
-        </h1>
+        <h1 className="text-2xl font-semibold mb-1">{config.label}</h1>
         <p className="text-xs text-gray-500 mb-4">
-          Mode:{" "}
-          <span className="font-semibold">
-            {mode === "create" && "Create"}
-            {mode === "edit" && "Edit"}
-            {mode === "view" && "View (read-only)"}
-          </span>
+          {mode === "create" && "Mode: Create — Submit new form"}
+          {mode === "edit" && "Mode: Edit — Modify existing form values"}
+          {mode === "view" && "Mode: View — Read only"}
+          {mode === "layout-edit-builder" &&
+            "Mode: Edit Layout — Only form structure can be changed; values are visible but locked"}
         </p>
-        <hr className="mb-6" />
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          {/* Sections */}
-          {config.sections.length === 0 && (
-            <p className="text-sm text-gray-500 italic">
-              No sections configured yet.
-            </p>
-          )}
-
-          {config.sections.map((section) => (
-            <div key={section.id} className="mb-4">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                {section.label || "Untitled Section"}
-              </h2>
-
-              {section.rows.map((row) => (
-                <div key={row.id} className="grid grid-cols-12 gap-4 mb-4">
-                  {row.fields.map((field) => (
-                    <div key={field.id} className={sizeToCol[field.size]}>
-                      {/* Label */}
-                      {field.type !== "checkbox" && (
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {field.label || "Field"}
-                          {field.required && (
-                            <span className="text-red-500 ml-0.5">*</span>
-                          )}
-                        </label>
-                      )}
-
-                      {/* Type-specific inputs */}
-                      {field.type === "text" && (
-                        <input
-                          type="text"
-                          {...register(field.name, {
-                          required: field.required ? "This field is required" : false,
-                          })}
-
-                          className="w-full border rounded-md px-2 py-1 text-sm"
-                          disabled={readonly}
-                        />
-                        
-                      )}
-
-                      {field.type === "number" && (
-                        <input
-                          type="number"
-                          {...register(field.name, {
-                          required: field.required ? "This field is required" : false,
-                          })}
-                          className="w-full border rounded-md px-2 py-1 text-sm"
-                          disabled={readonly}
-                        />
-                      )}
-
-                      {field.type === "textarea" && (
-                        <textarea
-                          {...register(field.name, {
-                          required: field.required ? "This field is required" : false,
-                          })}
-                          className="w-full border rounded-md px-2 py-1 text-sm"
-                          rows={3}
-                          disabled={readonly}
-                        />
-                      )}
-
-                      {field.type === "date" && (
-                        <input
-                          type="date"
-                          {...register(field.name, {
-                          required: field.required ? "This field is required" : false,
-                          })}
-                          className="w-full border rounded-md px-2 py-1 text-sm"
-                          disabled={readonly}
-                        />
-                      )}
-
-                      {field.type === "checkbox" && (
-                        <label className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            {...register(field.name, {
-                            required: field.required ? "This field is required" : false,
-                            })}
-                            className="w-4 h-4"
-                            disabled={readonly}
-                          />
-                          <span>
-                            {field.label}
-                            {field.required && (
-                              <span className="text-red-500 ml-0.5">*</span>
-                            )}
-                          </span>
-                        </label>
-                      )}
-
-                      {field.type === "select" && (
-                    <select
-                      {...register(field.name, {
-                      required: field.required ? "This field is required" : false,
-                      })}
-                      className="w-full border rounded-md px-2 py-1 text-sm"
-                      disabled={readonly}
-                    >
-                      <option value="">Select...</option>
-                      {field.options?.map((opt, idx) => (
-                        <option key={idx} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                      )}
-
-                      {errors[field.name] && !readonly && (
-                      <p className="text-xs text-red-600 mt-1">
-                        {errors[field.name]?.message as string}
-                      </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ))}
-
-          {!readonly && (
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                className="px-5 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          {config.sectionsEnabled &&
+            config.sections.map((section) => (
+              <div
+                key={section.id}
+                className="border rounded-md p-4 bg-gray-50 shadow-sm"
               >
-                Submit
-              </button>
-            </div>
-          )}
+                <h2 className="text-md font-semibold mb-3">{section.label}</h2>
+
+                {section.rows.map((row) => (
+                  <div
+                    key={row.id}
+                    className="grid mb-4"
+                    style={{
+                      gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
+                      gap: "14px",
+                    }}
+                  >
+                    {row.fields.map((field) => {
+                      const colSpan =
+                        field.size === "sm"
+                          ? "span 4"
+                          : field.size === "md"
+                          ? "span 6"
+                          : field.size === "lg"
+                          ? "span 8"
+                          : "span 12";
+
+                      return (
+                        <div key={field.id} style={{ gridColumn: colSpan }}>
+                          {/* LABEL */}
+                          {field.type !== "checkbox" && (
+                            <label className="block text-sm font-medium mb-1">
+                              {field.label}
+                              {field.required && <span className="text-red-500">*</span>}
+                            </label>
+                          )}
+
+                          {/* TEXT */}
+                          {field.type === "text" && (
+                            <input
+                              {...register(field.name, {
+                                required: !isLayoutEdit && field.required,
+                              })}
+                              disabled={disableInputs}
+                              readOnly={isLayoutEdit}
+                              className={`w-full border rounded px-2 py-1 ${
+                                errors[field.name] && "border-red-500"
+                              }`}
+                            />
+                          )}
+
+                          {/* NUMBER */}
+                          {field.type === "number" && (
+                            <input
+                              type="number"
+                              {...register(field.name, {
+                                required: !isLayoutEdit && field.required,
+                              })}
+                              disabled={disableInputs}
+                              readOnly={isLayoutEdit}
+                              className={`w-full border rounded px-2 py-1 ${
+                                errors[field.name] && "border-red-500"
+                              }`}
+                            />
+                          )}
+
+                          {/* DATE */}
+                          {field.type === "date" && (
+                            <input
+                              type="date"
+                              {...register(field.name, {
+                                required: !isLayoutEdit && field.required,
+                              })}
+                              disabled={disableInputs}
+                              readOnly={isLayoutEdit}
+                              className={`w-full border rounded px-2 py-1 ${
+                                errors[field.name] && "border-red-500"
+                              }`}
+                            />
+                          )}
+
+                          {/* TEXTAREA */}
+                          {field.type === "textarea" && (
+                            <textarea
+                              {...register(field.name, {
+                                required: !isLayoutEdit && field.required,
+                              })}
+                              disabled={disableInputs}
+                              readOnly={isLayoutEdit}
+                              rows={3}
+                              className={`w-full border rounded px-2 py-1 resize-y ${
+                                errors[field.name] && "border-red-500"
+                              }`}
+                            />
+                          )}
+
+                          {/* CHECKBOX */}
+                          {field.type === "checkbox" && (
+                            <label className="inline-flex items-center gap-2 mt-5 text-sm">
+                              <input
+                                type="checkbox"
+                                {...register(field.name)}
+                                disabled={disableInputs}
+                                readOnly={isLayoutEdit}
+                                className="w-4 h-4"
+                              />
+                              {field.label}
+                              {field.required && <span className="text-red-500">*</span>}
+                            </label>
+                          )}
+
+                          {/* SELECT */}
+                          {field.type === "select" && (
+                            <select
+                              {...register(field.name, {
+                                required: !isLayoutEdit && field.required,
+                              })}
+                              disabled={disableInputs}
+                              readOnly={isLayoutEdit}
+                              className={`w-full border rounded px-2 py-1 ${
+                                errors[field.name] && "border-red-500"
+                              }`}
+                            >
+                              <option value="">Select</option>
+                              {field.options?.map((op, idx) => (
+                                <option key={idx} value={op}>
+                                  {op}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+
+                          {/* ERROR */}
+                          {errors[field.name] && !disableInputs && (
+                            <p className="text-xs text-red-500 mt-1">
+                              {field.label} is required
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            ))}
+
+          {/* FOOTER BUTTONS */}
+          <div className="flex justify-end gap-4 border-t pt-4">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Close
+            </Button>
+
+            {mode === "create" && <Button type="submit">Submit</Button>}
+            {mode === "edit" && <Button type="submit">Save</Button>}
+            {mode === "layout-edit-builder" && (
+              <Button type="submit">Save Edited Layout</Button>
+            )}
+          </div>
         </form>
       </div>
     </div>
