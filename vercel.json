@@ -2,8 +2,8 @@
   "version": 2,
   "framework": null,
   "buildCommand": "pnpm nx build form-builder",
-  "outputDirectory": "dist/apps/form-builder",
   "installCommand": "pnpm install",
+  "outputDirectory": "dist/apps/form-builder",
   "routes": [
     {
       "src": "/(.*)",
