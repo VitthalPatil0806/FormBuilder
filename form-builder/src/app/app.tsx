@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { FormBuilderProvider } from "./contexts/FormBuilderContext";
 import { FormHistoryProvider } from "./contexts/FormHistoryContext";
-import FormLayoutBuilderPage from "./components/templates/FormLayoutBuilderPage";
-import FormHistoryPage from "./components/templates/FormHistoryPage";
+import FormLayoutBuilderPage from "./Components/templates/FormLayoutBuilderPage";
+import FormHistoryPage from "./Components/templates/FormHistoryPage";
 import "./index.css";
 
 const App: React.FC = () => {
