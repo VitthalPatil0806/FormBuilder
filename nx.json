@@ -50,6 +50,7 @@
     {
       "plugin": "@nx/vite/plugin",
       "options": {
+        "projects": ["form-builder"],
         "buildTargetName": "build",
         "testTargetName": "test",
         "serveTargetName": "serve",
