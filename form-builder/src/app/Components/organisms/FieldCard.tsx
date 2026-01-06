@@ -49,7 +49,7 @@ const FieldCard: React.FC<FieldCardProps> = ({ field, onChange, onDelete }) => {
       />
 
       {/* Type + Size */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <div>
           <span className="block text-xs font-medium text-gray-600 mb-1">Type</span>
           <FieldTypeSelect

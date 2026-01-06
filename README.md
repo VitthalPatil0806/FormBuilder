@@ -36,14 +36,14 @@ cd <your-repository-name>
 # Install dependencies
 npx install
 
-# Serve the React shop application (this will simultaneously serve the API backend)
-npx nx serve shop
+# To run project
+npx nx serve form-builder
+
+# To create build
+pnpm nx build @org/form-builder
 
 # ...or you can serve the API separately
 npx nx serve api
-
-# Build all projects
-npx nx run-many -t build
 
 # Run tests
 npx nx run-many -t test

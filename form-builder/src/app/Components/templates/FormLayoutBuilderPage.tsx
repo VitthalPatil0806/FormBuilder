@@ -5,10 +5,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { baseConfigSchema, validateLayoutTree } from "../../validation/formSchema";
 import { useFormBuilder } from "../../contexts/FormBuilderContext";
 import { useFormHistory } from "../../contexts/FormHistoryContext";
+
 import { FormViewType, SectionMeta, FieldType } from "../../domain/formTypes";
 import TextInput from "../atoms/TextInput";
 import SelectInput from "../atoms/SelectInput";
-import Toggle from "../atoms/Toggle";
 import Button from "../atoms/Button";
 import SectionAccordion from "../organisms/SectionAccordion";
 import FormPreviewModal from "../organisms/FormPreviewModal";
@@ -16,7 +16,7 @@ import FormPreviewModal from "../organisms/FormPreviewModal";
 type BaseConfigInputs = {
   label: string;
   viewType: FormViewType;
-  sectionsEnabled: boolean;
+  sectionsEnabled: boolean; // ✅ back again to satisfy Zod schema
 };
 
 interface Props {
@@ -30,7 +30,7 @@ const FormLayoutBuilderPage: React.FC<Props> = ({
   editingSubmissionId,
   onFinishLayoutEdit,
 }) => {
-  const { config, dispatch, loadConfig } = useFormBuilder();
+  const { config, dispatch } = useFormBuilder();
   const { submissions } = useFormHistory();
 
   const [showPreview, setShowPreview] = useState(false);
@@ -47,57 +47,57 @@ const FormLayoutBuilderPage: React.FC<Props> = ({
     defaultValues: {
       label: config.label,
       viewType: config.viewType,
-      sectionsEnabled: config.sectionsEnabled,
+      sectionsEnabled: true, // ✅ always true now
     },
   });
 
-  const sectionsEnabled = watch("sectionsEnabled");
   const currentViewType = watch("viewType") || "create";
-
   const isEditingExistingLayout = Boolean(editingSubmissionId);
 
-  // find the submission being edited (if any)
+  // find submission (if editing)
   const editingSubmission = editingSubmissionId
     ? submissions.find((s) => s.id === editingSubmissionId)
     : undefined;
 
   /**
-   * Load saved layout into builder when entering Edit Form Layout mode
-   * and force builder to allow layout editing.
+   * Load saved layout when editing form layout
    */
   useEffect(() => {
     if (editingSubmissionId) {
       const sub = submissions.find((s) => s.id === editingSubmissionId);
       if (sub) {
-        // Load config AND unlock layout editing
         dispatch({
           type: "LOAD_CONFIG",
           config: {
             ...sub.config,
-            viewType: "create", // unlock editing
-            sectionsEnabled: true,
+            viewType: "create",
+            sectionsEnabled: true, // ALWAYS TRUE NOW
           },
         });
 
-        // Sync left settings panel
+        // sync left panel
         setValue("label", sub.config.label);
         setValue("viewType", sub.config.viewType);
-        setValue("sectionsEnabled", sub.config.sectionsEnabled);
+        setValue("sectionsEnabled", true);
       }
+    } else {
+      // ensure sectionsEnabled is true in normal builder mode too
+      setValue("sectionsEnabled", true);
     }
   }, [editingSubmissionId, submissions, dispatch, setValue]);
 
   /**
-   * Save config panel settings (Validate & Save)
+   * Validate & Save Layout
    */
   const onSubmit = useCallback(
     (data: BaseConfigInputs) => {
+      // keep context in sync
       dispatch({ type: "SET_FORM_LABEL", label: data.label });
       dispatch({ type: "SET_VIEW_TYPE", viewType: data.viewType });
-      dispatch({ type: "SET_SECTIONS_ENABLED", enabled: data.sectionsEnabled });
+      dispatch({ type: "SET_SECTIONS_ENABLED", enabled: true }); // Always ON
 
       const layoutErrors = validateLayoutTree({
-        sectionsEnabled: data.sectionsEnabled,
+        sectionsEnabled: true, // Always true now
         sections: config.sections.map((s) => ({
           id: s.id,
           label: s.label,
@@ -115,14 +115,24 @@ const FormLayoutBuilderPage: React.FC<Props> = ({
         setValidationMessages(layoutErrors.map((e) => e.message));
       } else {
         setValidationMessages([]);
-        alert("✔ Form layout validated successfully.");
+
+        // ✅ Build JSON output of current config
+        const jsonOutput = {
+          ...config,
+          label: data.label,
+          viewType: data.viewType,
+          sectionsEnabled: true,
+        };
+
+        console.log("🔥 Form Layout JSON:", jsonOutput);
+        alert("✔ Form layout validated successfully.\n\nCheck console for JSON output.");
       }
     },
     [config, dispatch]
   );
 
   /**
-   * Section + Field operations
+   * Section operations
    */
   const onSectionOperations = useMemo(
     () => ({
@@ -186,21 +196,11 @@ const FormLayoutBuilderPage: React.FC<Props> = ({
             View History
           </Button>
 
-          {/* Open preview */}
+          {/* PREVIEW */}
           <Button
             size="sm"
             variant="primary"
-            onClick={() => {
-              // if editing a saved submission layout, show preview in layout-edit mode
-              if (isEditingExistingLayout && editingSubmission) {
-                // preview will receive existing values via prop below
-                setShowPreview(true);
-                return;
-              }
-
-              // normal preview behaviour
-              setShowPreview(true);
-            }}
+            onClick={() => setShowPreview(true)}
           >
             Preview
           </Button>
@@ -218,24 +218,35 @@ const FormLayoutBuilderPage: React.FC<Props> = ({
           <h2 className="text-sm font-semibold text-gray-700 mb-4 uppercase">
             Form Settings
           </h2>
+
           <form
             id="form-layout-builder"
             onSubmit={handleSubmit(onSubmit)}
             className="space-y-4"
           >
-            <TextInput label="Form Label" {...register("label")} error={errors.label?.message} />
+            <TextInput
+              label="Form Label"
+              {...register("label")}
+              error={errors.label?.message}
+            />
 
-            <SelectInput label="View Type" {...register("viewType")} error={errors.viewType?.message}>
+            <SelectInput
+              label="View Type"
+              {...register("viewType")}
+              error={errors.viewType?.message}
+            >
               <option value="">Select view type</option>
               <option value="create">Create</option>
               <option value="edit">Edit</option>
               <option value="view">View</option>
             </SelectInput>
 
-            <Toggle
-              label="Enable Sections"
-              checked={sectionsEnabled}
-              onChange={(checked) => setValue("sectionsEnabled", checked)}
+            {/* ✅ Hidden field to satisfy Zod schema & keep sections always enabled */}
+            <input
+              type="checkbox"
+              className="hidden"
+              defaultChecked
+              {...register("sectionsEnabled")}
             />
 
             {validationMessages.length > 0 && (
@@ -253,7 +264,7 @@ const FormLayoutBuilderPage: React.FC<Props> = ({
           </form>
         </div>
 
-        {/* LAYOUT BUILDER CANVAS */}
+        {/* BUILDER CANVAS */}
         <main className="flex-1 overflow-y-auto p-8">
           <div className="max-w-5xl mx-auto">
             <div className="flex justify-between items-center mb-6">
@@ -265,37 +276,42 @@ const FormLayoutBuilderPage: React.FC<Props> = ({
                 size="sm"
                 variant="secondary"
                 onClick={() => dispatch({ type: "ADD_SECTION" })}
-                disabled={!sectionsEnabled}
               >
                 + Add Section
               </Button>
             </div>
 
-            {!sectionsEnabled && (
-              <p className="text-sm text-gray-500">
-                Sections disabled — enable them from form settings.
-              </p>
-            )}
-
-            {sectionsEnabled &&
-              config.sections.map((section) => (
-                <SectionAccordion
-                  key={section.id}
-                  section={section}
-                  onUpdateLabel={(label) => onSectionOperations.updateLabel(section, label)}
-                  onToggleCollapse={() => onSectionOperations.toggleCollapse(section)}
-                  onDelete={() => onSectionOperations.delete(section)}
-                  onAddRow={() => onSectionOperations.addRow(section)}
-                  onDeleteRow={(rowId) => onSectionOperations.deleteRow(section, rowId)}
-                  onAddField={(rowId, type) => onSectionOperations.addField(section, rowId, type)}
-                  onDeleteField={(rowId, fieldId) =>
-                    onSectionOperations.deleteField(section, rowId, fieldId)
-                  }
-                  onUpdateField={(rowId, fieldId, patch) =>
-                    onSectionOperations.updateField(section, rowId, fieldId, patch)
-                  }
-                />
-              ))}
+            {config.sections.map((section) => (
+              <SectionAccordion
+                key={section.id}
+                section={section}
+                onUpdateLabel={(label) =>
+                  onSectionOperations.updateLabel(section, label)
+                }
+                onToggleCollapse={() =>
+                  onSectionOperations.toggleCollapse(section)
+                }
+                onDelete={() => onSectionOperations.delete(section)}
+                onAddRow={() => onSectionOperations.addRow(section)}
+                onDeleteRow={(rowId) =>
+                  onSectionOperations.deleteRow(section, rowId)
+                }
+                onAddField={(rowId, type) =>
+                  onSectionOperations.addField(section, rowId, type)
+                }
+                onDeleteField={(rowId, fieldId) =>
+                  onSectionOperations.deleteField(section, rowId, fieldId)
+                }
+                onUpdateField={(rowId, fieldId, patch) =>
+                  onSectionOperations.updateField(
+                    section,
+                    rowId,
+                    fieldId,
+                    patch
+                  )
+                }
+              />
+            ))}
           </div>
         </main>
       </div>
@@ -309,7 +325,6 @@ const FormLayoutBuilderPage: React.FC<Props> = ({
           existingValues={isEditingExistingLayout ? editingSubmission?.values : undefined}
           onClose={() => setShowPreview(false)}
           onLayoutSaved={() => {
-            // return to history after saving layout
             onFinishLayoutEdit();
             onGoToHistory();
           }}
